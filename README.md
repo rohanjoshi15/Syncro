@@ -1,7 +1,7 @@
 # Syncro
 **Project By:**  
-Rohan Joshi 
-Abhishek M Kumar
+- Rohan Joshi 
+- Abhishek M Kumar
 
 
 ---
