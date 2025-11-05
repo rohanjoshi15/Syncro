@@ -8,7 +8,7 @@
 
 ## 🧩 System Overview
 
-**SyncUp** is a scalable LAN-based video conferencing platform that supports:
+**Syncro** is a scalable LAN-based video conferencing platform that supports:
 
 - Multi-user video conferencing (up to 20+ concurrent users)
 - Real-time audio streaming
