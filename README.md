@@ -1,311 +1,254 @@
-# Syncro
+# Syncro — Scalable LAN Communication Suite
+
+Syncro is a lightweight, LAN-first real-time communication app supporting multi-user video, audio, screen sharing, text chat, and file transfer. It is designed for low-latency local networks and simplicity of deployment.
+
+This project contains both the server and the Qt desktop client (PyQt6). Recent updates focus on a unique, modern UI and robust file/screen sharing, including targeted file sends.
+
+---
+
 **Project By:**  
 - Rohan Joshi 
 - Abhishek M Kumar
 
+---
+
+## Features
+
+- Multi-user video conferencing (UDP JPEG streaming)
+- Multi-user audio conferencing (UDP PCM streaming)
+- Screen sharing (entire screen on X11; Wayland guidance and fallbacks)
+- Chat (TCP with sender echo for consistent history)
+- File transfer (TCP, large files, single-user or broadcast)
+- Participants list with live status indicators (📹, 🎤, 🖥️)
+- Modern, distinct Syncro theme (not Zoom-like)
+- Resilient client threading with a dedicated asyncio loop
 
 ---
 
-## 🧩 System Overview
+## Architecture Overview
 
-**Syncro** is a scalable LAN-based video conferencing platform that supports:
+- Server (`server.py`)
+  - TCP 9000: chat, control, and metadata (length-prefixed messages)
+  - UDP 9001: media (video, audio, screen frames) with a minimal header
+  - TCP 9002: file transfers (large file uploads/downloads)
+  - Broadcasts user lists and status on changes (e.g., VIDEO/ AUDIO/ SCREEN on/off)
+  - Routes file metadata to everyone or a single recipient (targeted sends)
 
-- Multi-user video conferencing (up to 20+ concurrent users)
-- Real-time audio streaming
-- Screen sharing capabilities
-- Group text chat
-- File sharing and transfer
+- Client Core (`client_core.py`)
+  - Persistent asyncio TCP client + UDP socket
+  - Video/audio/screen streaming loops
+  - File upload/download via port 9002
+  - Emits GUI callbacks for frames, audio, chat, users, file progress
 
-### Key Features
-
-- ⚡ **Low latency:** UDP-based streaming for video/audio/screen  
-- 🔒 **Reliability:** TCP-based control and chat messages  
-- 📈 **Scalability:** Thread pool architecture with async I/O  
-- 💻 **Cross-platform:** Works on Windows, Linux, and macOS  
-
----
-
-## 🧠 System Architecture
-
-### High-Level Architecture
-
-*(Insert architecture diagram here)*
-
-### Component Breakdown
-
-#### 1. Server (`server.py`)
-
-**Core Components**
-- `SrvA` class: Main server handler  
-- TCP server (port 9000): Control messages and chat  
-- UDP listener (port 9001): Real-time media streams  
-- File server (port 9002): File upload/download  
-
-**Key Features**
-- Asynchronous connection handling with `asyncio`  
-- Thread pool for parallel processing (20 workers)  
-- Client state management with connection tracking  
-- Automatic cleanup of inactive clients (5-minute timeout)
+- Client UI (`client.py`)
+  - PyQt6 desktop app
+  - Video grid with dynamic layout for camera and screen tiles
+  - Right panel: Participants and Chat
+  - Chat panel includes recipient selector and “Send Files” button
+  - Buttons for Mute, Start Video, Share Screen, Participants, Chat, Leave
 
 ---
 
-#### 2. Client Core (`client_core.py`)
+## Protocols and Ports
 
-**Core Components**
-- `ScalableCommClient` class: Network communication handler  
-- Video capture thread (OpenCV)  
-- Audio capture thread (PyAudio)  
-- Screen capture thread (MSS)  
-- UDP receiver thread  
-- Async TCP receiver  
-
-**Architecture Pattern**  
-*(Diagram/flow can be added)*
-
----
-
-#### 3. Client GUI (`client.py`)
-
-**Components**
-- `MainWindow`: Primary application window  
-- `VideoWidget`: Custom video display widgets  
-- `ChatWidget`: Chat interface  
-- `UploadDialog`: File upload interface  
-- `DownloadDialog`: File download manager  
-
-**Threading Model**
-- Main GUI thread: PyQt6 event loop  
-- Client thread: asyncio event loop for network I/O  
-- Signal-slot mechanism for thread-safe GUI updates  
+- 9000/TCP — Chat, Control, and Metadata
+  - Messages are UTF-8 strings with a 4-byte length prefix.
+  - Examples: `CHAT:<text>`, `CONTROL:VIDEO_ON`, `FILE_META:{json}`
+- 9001/UDP — Real-time Media
+  - Packet: `[type:1][name_len:2][sender_name:var][payload:var]`
+  - Types: 1 = video (JPEG), 2 = audio (raw PCM), 3 = screen (JPEG)
+- 9002/TCP — Files
+  - Upload: client connects, sends command=1, client_id, filename, size, then bytes.
+  - Download: client connects, sends command=2, client_id, filename; server returns size+data.
 
 ---
 
-## 🔗 Communication Protocols
-
-### 1. TCP Protocol (Port 9000)
-
-**Connection Flow:** *(illustration placeholder)*  
-**Message Format:** *(example JSON placeholder)*  
-**Message Types:** Control, Chat, Acknowledgment  
-
----
-
-### 2. UDP Protocol (Port 9001)
-
-**Packet Structure:** *(diagram placeholder)*  
-
-#### Video Stream Specifications
-- Resolution: 640x480  
-- Codec: JPEG compression  
-- Quality: 60%  
-- Frame rate: ~30 FPS  
-- Bandwidth: ~200–500 KB/s per stream  
-
-#### Audio Stream Specifications
-- Format: PCM 16-bit  
-- Sample rate: 16 kHz  
-- Channels: Mono  
-- Buffer: 1024 frames  
-- Bandwidth: ~32 KB/s  
-
-#### Screen Share Specifications
-- Resolution: 1280x720 (scaled)  
-- Codec: JPEG compression  
-- Quality: 50%  
-- Frame rate: ~15 FPS  
-- Bandwidth: ~300–800 KB/s  
-
----
-
-### 3. File Transfer Protocol (Port 9002)
-
-**Upload Flow** and **Download Flow** follow a JSON-based metadata format for file details and integrity verification.
-
----
-
-## ⚙️ Installation Guide
+## Setup
 
 ### Prerequisites
+- Python 3.10+
+- Recommended OS: Linux (tested on Ubuntu). Works on Windows/macOS with adjustments.
+- Suggested packages:
+  - `PyQt6`, `opencv-python`, `numpy`, `pyaudio`, `mss`
 
-**System Requirements:**
-- Python 3.8 or higher  
-- Webcam (for video conferencing)  
-- Microphone (for audio)  
-- Network Interface Card (LAN)
-
-**Supported Operating Systems:**
-- Linux (Ubuntu 20.04+, Debian 11+)  
-- Windows 10/11  
-- macOS 10.15+  
-
-### Step 1: Install Dependencies
+### Install dependencies
 ```bash
-pip install -r requirements.txt
+pip install pyqt6 opencv-python numpy pyaudio mss
 ```
 
-### Step 2: Linux-Specific Setup
-Ensure proper permissions for video/audio devices and `v4l2loopback` if needed.
-
-### Step 3: Test Camera
+On Ubuntu you may need system packages for audio/camera:
 ```bash
-python3 test_camera.py
+sudo apt update
+sudo apt install -y portaudio19-dev python3-pyaudio v4l-utils ffmpeg
 ```
-
-Expected Output:
-```
-✅ OpenCV Version: 4.x.x
-📹 Found video devices: ['/dev/video0', '/dev/video2']
-✅ Found 1 working camera(s): [0]
-💡 Use camera index: 0
-```
-
-### Step 4: Configure Server
-Edit `server.py` and set your server IP address.
 
 ---
 
-## 🚀 User Guide
+## Running
 
-### Starting the Server
+### 1) Start the server (Laptop A)
 ```bash
 python3 server.py
 ```
-Expected Output:
-```
-🚀 SCALABLE LAN COMMUNICATION SERVER
-📡 TCP Port: 9000
-📡 UDP Port: 9001
-📂 FILE Port: 9002
-✅ Server started successfully!
+
+Open firewall/ports if needed (Ubuntu ufw example):
+```bash
+sudo ufw allow 9000:9002/tcp
+sudo ufw allow 9001:9002/udp
+sudo ufw reload
 ```
 
-### Starting the Client
+Find your LAN IP (share this with clients):
+```bash
+hostname -I
+# or
+ip addr | grep -w inet | grep -v 127.0.0.1
+```
+
+### 2) Start the client (Laptop B)
 ```bash
 python3 client.py
 ```
+Click “Connect” and enter the server’s IP (e.g., `192.168.x.x`) and your username.
 
-### Connecting to a Meeting
-1. Click “Connect” button.  
-2. Enter the server IP (e.g., `192.168.1.100`).  
-3. Enter your username.  
-4. Click OK → ✅ Connected as [username].
-
-### Using Video
-- Click “Start Video” to begin.  
-- Other users see your stream in real-time.  
-- Troubleshooting: use `python3 test_camera.py` if issues arise.
-
-### Using Audio
-- Click “Mute” to toggle mic.  
-- Supports 16-bit PCM @ 16kHz mono.  
-
-### Screen Sharing
-- Click “Share Screen” to broadcast.  
-- Appears as “username (Screen)” in participants’ layout.  
-- Stop sharing by clicking again.
-
-### Text Chat
-- Type a message → press Enter or click “Send”.  
-- Messages appear with timestamps.
-
-### File Sharing
-**Upload:**
-1. Click “Upload File” → choose file.  
-2. Click “Start Upload”.  
-
-**Download:**
-1. Click “Downloads” → select a file → “Download”.  
-2. Progress bar shows transfer status.
-
----
-
-## ⚠️ Troubleshooting
-
-### Camera Issues
-- Ensure no other app uses the webcam.
-- Check permissions or use diagnostic script.
-
-### Connection Issues
-- Verify server is running.  
-- Check firewall (ports 9000–9002).
-
-### Audio Issues
-- Verify PyAudio installation and mic access.
-
-### Screen Share Issues
-- Wayland users: install `xdg-desktop-portal`.  
-- macOS: enable screen recording permissions.
-
-### Performance Issues
-- Reduce frame rate or compression quality.  
-- Close unused streams.  
-- Prefer wired LAN for stability.
-
-### File Transfer Issues
-- Ensure server has storage space.  
-- Check file port accessibility.
-
----
-
-## 📊 Performance Metrics
-
-| Metric | Typical Value |
-|:--|:--|
-| Video Latency | 50–100 ms |
-| Audio Latency | 30–50 ms |
-| Chat Latency | 10–20 ms |
-| File Transfer | Depends on file size |
-
----
-
-## 🔒 Security Considerations
-
-**Designed for trusted LAN environments.**
-
-**Current Limitations:**
-- No encryption (TCP/UDP unencrypted)  
-- No authentication or authorization  
-- Files stored in plain text  
-- No filename sanitization
-
-**Recommended Deployment:**
-1. Use on private LANs only.  
-2. Firewall external access.  
-3. Use VPN (WireGuard/OpenVPN) if remote.  
-4. Keep dependencies updated.
-
-### Future Enhancements
-- TLS/SSL for TCP  
-- DTLS for UDP  
-- Token-based authentication  
-- Input validation & ACLs  
-
----
-
-## 🧱 Development
-
-### Project Structure
-```
-syncup/
-├── server.py              # Server core
-├── client_core.py         # Client networking
-├── client.py              # Client GUI
-├── test_camera.py         # Camera diagnostic tool
-├── requirements.txt       # Python dependencies
-├── server_file_uploads/   # File storage
-└── README.md              # Documentation
+Connectivity checks (from client):
+```bash
+ping <server-ip>
+nc -vz <server-ip> 9000
 ```
 
 ---
 
-## 🖥️ Results & Features
+## Using the App
 
-- Modern GUI with PyQt6  
-- Dynamic grid layout for participants  
-- Group chat with timestamps  
-- Real-time file upload/download  
-- Screen sharing and dynamic role switching  
+### Controls
+- Mute: toggle microphone streaming
+- Start Video: toggle webcam streaming
+- Share Screen: toggle desktop or window/screen share depending on environment
+- Participants: show/hide participants panel
+- Chat: show/hide chat
+- Leave: close client
+
+### Participants
+- Shows users and status icons
+- Updates immediately when users toggle audio/video/screen or disconnect
+
+### Chat
+- Group chat with timestamp and sender (your own messages display as “You”)
+
+### File Transfer
+- In the chat panel:
+  - Recipient dropdown: “Everyone” or select a specific user
+  - “Send Files” button: pick one or more files (any type/size)
+- Behavior:
+  - Files are uploaded over TCP 9002.
+  - A `FILE_META` message is sent over TCP 9000 with `{ filename, size, target }`.
+  - Server routes metadata to everyone or a specific recipient and echoes to sender.
+  - Recipients see a prompt to download; a progress dialog tracks download.
 
 ---
 
-© 2025 Syncro Project Team
+## Screen Sharing (X11 vs Wayland)
+
+- X11 (Xorg): full-screen capture works via `mss`.
+- Wayland: native screen capture may be restricted by the compositor.
+  - Easiest fix: run client under XWayland for full-screen capture:
+    ```bash
+    QT_QPA_PLATFORM=xcb python3 /home/rajoshi/Documents/Rohan_Study/CN_project/client.py
+    ```
+  - Ensure portals are installed (depending on desktop):
+    - GNOME/Ubuntu: `sudo apt install xdg-desktop-portal xdg-desktop-portal-gnome`
+    - KDE: `sudo apt install xdg-desktop-portal xdg-desktop-portal-kde`
+    - GTK: `sudo apt install xdg-desktop-portal xdg-desktop-portal-gtk`
+  - If capture still fails, the compositor may block global grabs; use the XWayland command above.
+
+Quick checks:
+```bash
+echo $XDG_SESSION_TYPE      # wayland or x11
+systemctl --user status xdg-desktop-portal
+```
+
+---
+
+## Performance Notes
+
+- Video
+  - JPEG quality ~60 for camera, ~50 for screen (adjust in client core)
+  - 640×480 @ ~30 FPS camera defaults; screen scaled around 1280×720
+- Audio
+  - PCM 16-bit, mono, 16kHz; 1024-frame chunks
+- Network
+  - UDP for media minimizes latency; LAN recommended
+  - Increase/decrease JPEG quality and frame sizes to tune bandwidth
+
+---
+
+## Security Considerations
+
+- LAN-focused: no authentication/crypto is included by default
+- Anyone on the network can connect if they know the server IP and ports
+- For secure deployments:
+  - Use a VPN or trusted LAN
+  - Put server behind a firewall
+  - Add authentication and TLS on TCP control/file channels (future work)
+
+---
+
+## Troubleshooting
+
+- Camera not working
+  - Run `python3 test_camera.py` to probe indices and preview
+  - Ensure permissions and that no other app is using the webcam
+- No audio
+  - Check `pyaudio` installed and default input device
+- Can’t connect from client
+  - Verify IP, that server is running, and that ports 9000–9002 are open
+  - `nc -vz <server-ip> 9000` should succeed
+- Screen share fails (Wayland)
+  - Run under XWayland: `QT_QPA_PLATFORM=xcb python3 client.py`
+  - Install and restart portals, relogin if needed
+- File transfer errors
+  - Check that server created `server_file_uploads/` and has write permissions
+  - Large files: ensure disk space and network stability
+
+---
+
+## Project Structure
+
+```
+/home/rajoshi/Documents/Rohan_Study/CN_project/
+  ├── client.py                 # PyQt6 GUI client
+  ├── client_core.py            # Networking core (TCP/UDP, file transfer)
+  ├── server.py                 # Asyncio server
+  ├── test_camera.py            # Camera diagnostic tool
+  ├── server_file_uploads/      # Server-side uploaded files
+  └── picture/                  # App images (icons, etc.)
+```
+
+---
+
+## Recent Changes (Highlights)
+
+- UI theme overhaul (purple/teal accent, refined components, removed Zoom branding)
+- Participants and chat styling improvements
+- Robust screen-share handling and improved status broadcasts
+- File transfer: multi-file picker, recipient dropdown (Everyone or a single user)
+- Server routes `FILE_META` to a specific user or all; clients prompt with progress
+- Client core: added `send_screen_frame` to support GUI-driven capture paths
+
+---
+
+## Roadmap Ideas
+
+- Optional E2E encryption for chat/control and files
+- Multi-room support and basic access control
+- Adaptive bitrate and resolution for video/screen
+- Named file rooms or history panel for shared files
+- Packaged executables for Linux/Windows/macOS
+
+---
+
+## Credits
+
+- Built with Python, PyQt6, asyncio, OpenCV, NumPy, PyAudio, and MSS.
+- Designed for simplicity, readability, and LAN-first performance.
