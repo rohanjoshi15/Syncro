@@ -308,5 +308,4 @@ syncup/
 
 ---
 
-© 2025 SyncUp Project Team  
-LAN-Based Collaboration Suite | Department of Computer Science
+© 2025 Syncro Project Team
